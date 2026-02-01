@@ -2,10 +2,10 @@ cask "ohh-brother" do
   version "0.1.0"
   sha256 :no_check  # TODO: Add actual sha256 after first release
 
-  url "https://github.com/OWNER/ohh-brother/releases/download/v#{version}/Ohh-Brother-#{version}-mac.zip"
+  url "https://github.com/tomfuertes/ohh-brother/releases/download/v#{version}/Ohh-Brother-#{version}-mac.zip"
   name "Ohh Brother"
   desc "Passive meeting transcription with speaker diarization"
-  homepage "https://github.com/OWNER/ohh-brother"
+  homepage "https://github.com/tomfuertes/ohh-brother"
 
   app "Ohh Brother.app"
 

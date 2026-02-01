@@ -19,10 +19,10 @@ Passive meeting transcription app for macOS with speaker diarization. Runs entir
 
 ## Installation
 
-### From Homebrew (recommended)
+### From Homebrew
 
 ```bash
-brew install --cask ohh-brother
+brew install --cask https://raw.githubusercontent.com/tomfuertes/ohh-brother/main/Casks/ohh-brother.rb
 ```
 
 ### Manual Installation
@@ -86,7 +86,7 @@ Duration: 45 minutes
 
 ```bash
 # Clone repo
-git clone https://github.com/OWNER/ohh-brother
+git clone https://github.com/tomfuertes/ohh-brother
 cd ohh-brother
 
 # Install JS dependencies
