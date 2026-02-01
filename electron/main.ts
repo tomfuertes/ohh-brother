@@ -115,28 +115,6 @@ class OhhBrotherApp {
   private buildMenu(): Menu {
     const historyFiles = this.history.getRecentFiles(10);
 
-    const historySubmenu: Electron.MenuItemConstructorOptions[] = historyFiles.length > 0
-      ? [
-          ...historyFiles.map((file) => ({
-            label: `📄 ${file.displayName}`,
-            click: () => this.openTranscript(file),
-          })),
-          { type: "separator" as const },
-          {
-            label: "🗑️ Delete older than 7 days",
-            click: () => this.deleteOldTranscripts(7),
-          },
-          {
-            label: "🗑️ Delete older than 30 days",
-            click: () => this.deleteOldTranscripts(30),
-          },
-          {
-            label: "🗑️ Delete all",
-            click: () => this.deleteOldTranscripts(0),
-          },
-        ]
-      : [{ label: "No transcripts yet", enabled: false }];
-
     const template: Electron.MenuItemConstructorOptions[] = [
       // Recording status
       this.isRecording
@@ -170,13 +148,21 @@ class OhhBrotherApp {
 
       { type: "separator" as const },
 
-      // History
-      {
-        label: "History",
-        submenu: historySubmenu,
-      },
+      // History items inline
+      ...(historyFiles.length > 0
+        ? historyFiles.map((file) => ({
+            label: file.displayName,
+            click: () => this.openTranscript(file),
+          }))
+        : [{ label: "No transcripts yet", enabled: false }]),
 
       { type: "separator" as const },
+
+      // Open folder
+      {
+        label: "Open Transcripts Folder",
+        click: () => this.openTranscriptsFolder(),
+      },
 
       // Settings
       {
@@ -228,6 +214,10 @@ class OhhBrotherApp {
   private deleteOldTranscripts(daysOld: number): void {
     this.history.deleteOlderThan(daysOld);
     this.updateMenu();
+  }
+
+  private openTranscriptsFolder(): void {
+    shell.openPath(getTranscriptsDir());
   }
 
   private openSettings(): void {
