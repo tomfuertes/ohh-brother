@@ -164,6 +164,29 @@ class OhhBrotherApp {
         click: () => this.openTranscriptsFolder(),
       },
 
+      // Clear history submenu
+      {
+        label: "Clear History",
+        enabled: historyFiles.length > 0,
+        submenu: [
+          {
+            label: "Older than 7 days",
+            click: () => this.deleteOldTranscripts(7),
+          },
+          {
+            label: "Older than 30 days",
+            click: () => this.deleteOldTranscripts(30),
+          },
+          { type: "separator" as const },
+          {
+            label: "Delete All",
+            click: () => this.deleteOldTranscripts(0),
+          },
+        ],
+      },
+
+      { type: "separator" as const },
+
       // Settings
       {
         label: "Settings...",
