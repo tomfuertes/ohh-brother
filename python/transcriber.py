@@ -12,7 +12,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from audio import AudioCapture, AudioBuffer
+from audio import AudioCapture, AudioBuffer, SAMPLE_RATE
 from parakeet_wrapper import Transcriber
 from diarize import Diarizer, merge_transcript_with_speakers
 
@@ -23,17 +23,15 @@ class TranscriptionDaemon:
     def __init__(
         self,
         output_dir: Path,
-        sample_rate: int = 16000,
-        process_interval: float = 10.0,  # Process every 10 seconds
+        process_interval: float = 5.0,  # Process every 5 seconds
     ):
         self.output_dir = output_dir
-        self.sample_rate = sample_rate
         self.process_interval = process_interval
 
-        self.audio_capture = AudioCapture(sample_rate=sample_rate)
-        self.audio_buffer = AudioBuffer(sample_rate=sample_rate)
-        self.transcriber = Transcriber(sample_rate=sample_rate)
-        self.diarizer = Diarizer(sample_rate=sample_rate)
+        self.audio_capture = AudioCapture()
+        self.audio_buffer = AudioBuffer()
+        self.transcriber = Transcriber()
+        self.diarizer = Diarizer()
 
         self._recording = False
         self._current_session: Optional[str] = None
@@ -66,7 +64,6 @@ class TranscriptionDaemon:
         self.send_message(
             {
                 "type": "transcript",
-                "speaker": segment.get("speaker", "UNKNOWN"),
                 "text": segment["text"],
                 "start": segment["start"],
                 "end": segment["end"],
@@ -83,35 +80,31 @@ class TranscriptionDaemon:
             return self._session_start.strftime("%Y-%m-%d_%H-%M")
         return datetime.now().strftime("%Y-%m-%d_%H-%M")
 
-    def _save_transcript(self) -> None:
-        """Save current transcript to markdown file."""
-        if not self._all_segments:
+    def _get_transcript_path(self) -> Path:
+        """Get the path to the current transcript file."""
+        filename = self._get_session_filename() + ".md"
+        return self.output_dir / filename
+
+    def _write_header(self) -> None:
+        """Write the header to a new transcript file."""
+        filepath = self._get_transcript_path()
+        header = f"# Meeting - {self._session_start.strftime('%Y-%m-%d %I:%M %p') if self._session_start else 'Unknown'}\n\n"
+        filepath.write_text(header)
+
+    def _append_segments(self, segments: list[dict]) -> None:
+        """Append segments to the transcript file."""
+        if not segments:
             return
 
-        filename = self._get_session_filename() + ".md"
-        filepath = self.output_dir / filename
-
-        # Calculate duration
-        duration_mins = int(self._total_audio_duration // 60)
-        duration_str = f"{duration_mins} minutes" if duration_mins > 0 else "< 1 minute"
-
-        # Build markdown content
-        lines = [
-            f"# Meeting - {self._session_start.strftime('%Y-%m-%d %I:%M %p') if self._session_start else 'Unknown'}",
-            f"Duration: {duration_str}",
-            "",
-            "## Transcript",
-            "",
-        ]
-
-        for seg in self._all_segments:
+        filepath = self._get_transcript_path()
+        lines = []
+        for seg in segments:
             timestamp = self._format_timestamp(seg["start"])
-            speaker = seg.get("speaker", "UNKNOWN")
             text = seg["text"].strip()
-            lines.append(f"[{timestamp}] **{speaker}**: {text}")
-            lines.append("")
+            lines.append(f"[{timestamp}] {text}\n")
 
-        filepath.write_text("\n".join(lines))
+        with open(filepath, "a") as f:
+            f.writelines(lines)
 
         self.send_message(
             {
@@ -136,7 +129,7 @@ class TranscriptionDaemon:
         if len(audio) == 0:
             return
 
-        audio_duration = len(audio) / self.sample_rate
+        audio_duration = len(audio) / SAMPLE_RATE
         offset = self._total_audio_duration
 
         try:
@@ -156,8 +149,8 @@ class TranscriptionDaemon:
 
             self._total_audio_duration += audio_duration
 
-            # Save periodically
-            self._save_transcript()
+            # Append new segments to file
+            self._append_segments(merged)
 
         except Exception as e:
             self.send_error(f"Processing error: {str(e)}")
@@ -190,6 +183,9 @@ class TranscriptionDaemon:
         self._all_segments = []
         self._total_audio_duration = 0.0
 
+        # Write header to new file
+        self._write_header()
+
         self.audio_capture.start()
         self._processing_thread = threading.Thread(target=self._processing_loop)
         self._processing_thread.start()
@@ -209,9 +205,6 @@ class TranscriptionDaemon:
         if self._processing_thread:
             self._processing_thread.join(timeout=5.0)
         self._process_audio()
-
-        # Final save
-        self._save_transcript()
 
         self.send_message(
             {
@@ -311,20 +304,6 @@ def test_mode():
     for seg in segments:
         print(f"   [{seg['start']:.1f}-{seg['end']:.1f}] {seg['text']}", file=sys.stderr)
 
-    hf_token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_TOKEN")
-    if hf_token:
-        print("3. Testing diarization...", file=sys.stderr)
-        diarizer = Diarizer()
-        speaker_segments = diarizer.diarize(audio)
-        print(f"   Speaker segments: {len(speaker_segments)}", file=sys.stderr)
-        for seg in speaker_segments:
-            print(
-                f"   [{seg['start']:.1f}-{seg['end']:.1f}] {seg['speaker']}",
-                file=sys.stderr,
-            )
-    else:
-        print("3. Skipping diarization (no HF_TOKEN)", file=sys.stderr)
-
     print("\nTest complete!", file=sys.stderr)
 
 
@@ -344,16 +323,10 @@ def main():
         help="Directory to save transcripts",
     )
     parser.add_argument(
-        "--sample-rate",
-        type=int,
-        default=16000,
-        help="Audio sample rate (default: 16000)",
-    )
-    parser.add_argument(
         "--process-interval",
         type=float,
-        default=10.0,
-        help="Process audio every N seconds (default: 10)",
+        default=5.0,
+        help="Process audio every N seconds (default: 5)",
     )
 
     args = parser.parse_args()
@@ -364,7 +337,6 @@ def main():
 
     daemon = TranscriptionDaemon(
         output_dir=Path(args.output_dir),
-        sample_rate=args.sample_rate,
         process_interval=args.process_interval,
     )
     daemon.run()

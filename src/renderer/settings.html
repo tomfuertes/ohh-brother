@@ -117,19 +117,6 @@
   </div>
 
   <div class="section">
-    <h2>Recording</h2>
-    <div class="row">
-      <div>
-        <label for="sampleRate">Sample Rate</label>
-        <select id="sampleRate">
-          <option value="16000">16000 Hz (default)</option>
-          <option value="44100">44100 Hz (high quality)</option>
-        </select>
-      </div>
-    </div>
-  </div>
-
-  <div class="section">
     <h2>History</h2>
     <label for="maxAgeDays">Auto-delete transcripts after</label>
     <select id="maxAgeDays">
@@ -181,9 +168,6 @@
           document.getElementById('apiKey').value = settings.llm.apiKey || '';
           modelSelect.value = settings.llm.model || models[settings.llm.provider || 'anthropic'][0].value;
         }
-        if (settings?.recording) {
-          document.getElementById('sampleRate').value = settings.recording.sampleRate || 16000;
-        }
         if (settings?.history) {
           document.getElementById('maxAgeDays').value = settings.history.maxAgeDays || 90;
         }
@@ -200,7 +184,6 @@
           model: modelSelect.value,
         },
         recording: {
-          sampleRate: parseInt(document.getElementById('sampleRate').value),
           chunkMinutes: 60,
         },
         history: {

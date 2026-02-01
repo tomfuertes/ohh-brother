@@ -7,20 +7,16 @@ from typing import Callable, Optional
 import numpy as np
 import sounddevice as sd
 
+SAMPLE_RATE = 16000  # Standard for speech recognition
+
 
 class AudioCapture:
     """Captures audio from the default microphone."""
 
-    def __init__(
-        self,
-        sample_rate: int = 16000,
-        channels: int = 1,
-        chunk_duration: float = 0.5,
-    ):
-        self.sample_rate = sample_rate
+    def __init__(self, channels: int = 1, chunk_duration: float = 0.5):
         self.channels = channels
         self.chunk_duration = chunk_duration
-        self.chunk_size = int(sample_rate * chunk_duration)
+        self.chunk_size = int(SAMPLE_RATE * chunk_duration)
 
         self._audio_queue: queue.Queue[np.ndarray] = queue.Queue()
         self._recording = False
@@ -45,7 +41,7 @@ class AudioCapture:
 
         self._recording = True
         self._stream = sd.InputStream(
-            samplerate=self.sample_rate,
+            samplerate=SAMPLE_RATE,
             channels=self.channels,
             dtype=np.float32,
             blocksize=self.chunk_size,
@@ -88,8 +84,7 @@ class AudioCapture:
 class AudioBuffer:
     """Accumulates audio for batch processing."""
 
-    def __init__(self, sample_rate: int = 16000):
-        self.sample_rate = sample_rate
+    def __init__(self):
         self._buffer: list[np.ndarray] = []
         self._lock = threading.Lock()
 
@@ -113,7 +108,7 @@ class AudioBuffer:
             if not self._buffer:
                 return 0.0
             total_samples = sum(len(chunk) for chunk in self._buffer)
-            return total_samples / self.sample_rate
+            return total_samples / SAMPLE_RATE
 
     def clear(self) -> None:
         """Clear the buffer."""

@@ -5,36 +5,40 @@ import { PythonProcess } from "./python-process";
 import { SettingsManager, Settings } from "./settings";
 import { HistoryManager, TranscriptFile } from "./history";
 
-// Paths
-const APP_SUPPORT_DIR = path.join(
-  app.getPath("appData"),
-  "OhhBrother"
-);
-const TRANSCRIPTS_DIR = path.join(APP_SUPPORT_DIR, "transcripts");
-const CONFIG_PATH = path.join(APP_SUPPORT_DIR, "config.json");
+// Paths (computed lazily after app ready)
+function getAppSupportDir(): string {
+  return path.join(app.getPath("appData"), "OhhBrother");
+}
+function getTranscriptsDir(): string {
+  return path.join(getAppSupportDir(), "transcripts");
+}
+function getConfigPath(): string {
+  return path.join(getAppSupportDir(), "config.json");
+}
 
 // Find Python in the app bundle or development location
 function getPythonDir(): string {
   if (app.isPackaged) {
     return path.join(process.resourcesPath, "python");
   }
-  return path.join(__dirname, "..", "..", "python");
+  // In dev mode, use cwd (electron . is run from project root)
+  return path.join(process.cwd(), "python");
 }
 
 class OhhBrotherApp {
   private mb: Menubar | null = null;
   private tray: Tray | null = null;
-  private pythonProcess: PythonProcess;
-  private settings: SettingsManager;
-  private history: HistoryManager;
+  private pythonProcess!: PythonProcess;
+  private settings!: SettingsManager;
+  private history!: HistoryManager;
   private isRecording = false;
   private recordingDuration = 0;
   private currentSession: string | null = null;
 
-  constructor() {
-    this.pythonProcess = new PythonProcess(getPythonDir(), TRANSCRIPTS_DIR);
-    this.settings = new SettingsManager(CONFIG_PATH);
-    this.history = new HistoryManager(TRANSCRIPTS_DIR);
+  private init(): void {
+    this.pythonProcess = new PythonProcess(getPythonDir(), getTranscriptsDir());
+    this.settings = new SettingsManager(getConfigPath());
+    this.history = new HistoryManager(getTranscriptsDir());
 
     this.setupPythonCallbacks();
     this.setupIPC();
@@ -75,7 +79,7 @@ class OhhBrotherApp {
           break;
         case "transcript":
           // Could display in a window if desired
-          console.log(`[${msg.speaker}] ${msg.text}`);
+          console.log(msg.text);
           break;
         case "error":
           console.error("Python error:", msg.message);
@@ -99,7 +103,7 @@ class OhhBrotherApp {
     if (app.isPackaged) {
       return path.join(process.resourcesPath, "assets", iconName);
     }
-    return path.join(__dirname, "..", "..", "assets", iconName);
+    return path.join(process.cwd(), "assets", iconName);
   }
 
   private formatDuration(seconds: number): string {
@@ -235,12 +239,12 @@ class OhhBrotherApp {
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
-        preload: path.join(__dirname, "preload.js"),
+        preload: path.join(process.cwd(), "dist", "electron", "preload.js"),
       },
     });
 
     // Load settings HTML
-    win.loadFile(path.join(__dirname, "..", "renderer", "settings.html"));
+    win.loadFile(path.join(process.cwd(), "dist", "renderer", "settings.html"));
   }
 
   private async summarizeTranscript(): Promise<void> {
@@ -265,11 +269,11 @@ class OhhBrotherApp {
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
-        preload: path.join(__dirname, "preload.js"),
+        preload: path.join(process.cwd(), "dist", "electron", "preload.js"),
       },
     });
 
-    win.loadFile(path.join(__dirname, "..", "renderer", "summary.html"));
+    win.loadFile(path.join(process.cwd(), "dist", "renderer", "summary.html"));
 
     // Send transcript to renderer for summarization
     win.webContents.on("did-finish-load", () => {
@@ -288,6 +292,9 @@ class OhhBrotherApp {
 
   async start(): Promise<void> {
     await app.whenReady();
+
+    // Initialize after app is ready (paths need app.getPath)
+    this.init();
 
     // Hide dock icon (menu bar app)
     app.dock?.hide();

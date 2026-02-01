@@ -8,7 +8,7 @@
   "scripts": {
     "dev": "bun run build && electron .",
     "build": "bun run build:electron && bun run build:renderer",
-    "build:electron": "bun build electron/main.ts electron/preload.ts --outdir dist/electron --target node",
+    "build:electron": "bun build --target node --format cjs --packages=external electron/main.ts electron/preload.ts --outdir dist/electron",
     "build:renderer": "mkdir -p dist/renderer && cp src/renderer/*.html dist/renderer/",
     "start": "electron .",
     "package": "electron-builder",

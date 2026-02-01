@@ -9,7 +9,6 @@ export interface LLMSettings {
 
 export interface RecordingSettings {
   chunkMinutes: number;
-  sampleRate: number;
 }
 
 export interface HistorySettings {
@@ -25,7 +24,6 @@ export interface Settings {
 const DEFAULT_SETTINGS: Settings = {
   recording: {
     chunkMinutes: 60,
-    sampleRate: 16000,
   },
   history: {
     maxAgeDays: 90,
