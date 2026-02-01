@@ -1,21 +1,20 @@
 # Ohh Brother
 
-Passive meeting transcription app for macOS with speaker diarization. Runs entirely local - no cloud transcription, no account required.
+Passive meeting transcription app for macOS. Runs entirely local - no cloud transcription, no account required.
 
 ## Features
 
-- **Local transcription** using NVIDIA Parakeet (no data leaves your machine)
-- **Speaker diarization** using NVIDIA NeMo (identifies who said what)
+- **Local transcription** using faster-whisper (no data leaves your machine)
 - **Menu bar app** - start/stop recording with a click
-- **Markdown transcripts** saved to `~/Library/Application Support/OhhBrother/transcripts/`
+- **Streaming transcripts** - markdown updates in real-time as you speak
 - **LLM summarization** (optional) - summarize meetings with Claude or GPT
 
 ## Requirements
 
 - macOS 12+ (Apple Silicon or Intel)
-- Python 3.9+
+- Python 3.11
 - Microphone access
-- ~4GB disk space for ML models
+- ~500MB disk space for ML models
 
 ## Installation
 
@@ -39,10 +38,10 @@ The Python ML environment requires one-time setup:
 cd "/Applications/Ohh Brother.app/Contents/Resources/python"
 
 # Create and activate virtual environment
-python3 -m venv venv
+python3.11 -m venv venv
 source venv/bin/activate
 
-# Install dependencies (downloads ~2GB of ML models)
+# Install dependencies (downloads ~500MB of ML models)
 pip install -r requirements.txt
 ```
 
@@ -62,16 +61,13 @@ pip install -r requirements.txt
 
 ## Transcript Format
 
-Transcripts are saved as Markdown:
+Transcripts are saved as Markdown and stream in real-time:
 
 ```markdown
 # Meeting - 2026-02-01 10:30 AM
-Duration: 45 minutes
 
-## Transcript
-
-[00:00:05] **SPEAKER_00**: Let's get started with the Q3 review.
-[00:00:15] **SPEAKER_01**: Sure, I have the numbers here...
+[00:05] Let's get started with the Q3 review.
+[00:15] Sure, I have the numbers here...
 ```
 
 ## Development
@@ -79,7 +75,7 @@ Duration: 45 minutes
 ### Prerequisites
 
 - [Bun](https://bun.sh) (JavaScript runtime)
-- Python 3.9+
+- Python 3.11
 - Node.js (for Electron)
 
 ### Setup
@@ -93,7 +89,10 @@ cd ohh-brother
 bun install
 
 # Setup Python environment
-./scripts/setup-python.sh
+cd python
+python3.11 -m venv venv
+./venv/bin/pip install -r requirements.txt
+cd ..
 
 # Run in development
 bun run dev
@@ -122,9 +121,8 @@ bun run package
 ┌──────────────────▼──────────────────────────┐
 │  Python Subprocess                          │
 │  - Audio capture (sounddevice)              │
-│  - Parakeet transcription (NeMo)            │
-│  - NeMo speaker diarization                 │
-│  - Writes markdown to ~/Library/App Support │
+│  - Whisper transcription (faster-whisper)   │
+│  - Streams markdown to ~/Library/App Support│
 └─────────────────────────────────────────────┘
 ```
 
@@ -141,10 +139,10 @@ bun run package
 Grant microphone access in System Settings > Privacy & Security > Microphone
 
 ### Models downloading slowly
-First run downloads ~2GB of ML models. This is one-time only.
+First run downloads ~500MB of ML models. This is one-time only.
 
 ### High CPU usage
-Transcription is CPU-intensive. Processing happens in 10-second batches to balance latency and resource usage.
+Transcription is CPU-intensive. Processing happens in 5-second batches to balance latency and resource usage.
 
 ## License
 
