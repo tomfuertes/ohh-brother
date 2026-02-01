@@ -1,0 +1,328 @@
+import { app, Menu, nativeImage, Tray, BrowserWindow, shell, ipcMain } from "electron";
+import { menubar, Menubar } from "menubar";
+import * as path from "path";
+import { PythonProcess } from "./python-process";
+import { SettingsManager, Settings } from "./settings";
+import { HistoryManager, TranscriptFile } from "./history";
+
+// Paths
+const APP_SUPPORT_DIR = path.join(
+  app.getPath("appData"),
+  "OhhBrother"
+);
+const TRANSCRIPTS_DIR = path.join(APP_SUPPORT_DIR, "transcripts");
+const CONFIG_PATH = path.join(APP_SUPPORT_DIR, "config.json");
+
+// Find Python in the app bundle or development location
+function getPythonDir(): string {
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, "python");
+  }
+  return path.join(__dirname, "..", "..", "python");
+}
+
+class OhhBrotherApp {
+  private mb: Menubar | null = null;
+  private tray: Tray | null = null;
+  private pythonProcess: PythonProcess;
+  private settings: SettingsManager;
+  private history: HistoryManager;
+  private isRecording = false;
+  private recordingDuration = 0;
+  private currentSession: string | null = null;
+
+  constructor() {
+    this.pythonProcess = new PythonProcess(getPythonDir(), TRANSCRIPTS_DIR);
+    this.settings = new SettingsManager(CONFIG_PATH);
+    this.history = new HistoryManager(TRANSCRIPTS_DIR);
+
+    this.setupPythonCallbacks();
+    this.setupIPC();
+  }
+
+  private setupIPC(): void {
+    ipcMain.handle("get-settings", () => {
+      return this.settings.get();
+    });
+
+    ipcMain.handle("save-settings", (_event, newSettings: Settings) => {
+      this.settings.set(newSettings);
+      return true;
+    });
+  }
+
+  private setupPythonCallbacks(): void {
+    this.pythonProcess.onMessage((msg) => {
+      switch (msg.type) {
+        case "ready":
+          console.log("Python process ready");
+          break;
+        case "status":
+          this.isRecording = msg.recording;
+          this.recordingDuration = msg.duration || 0;
+          this.updateMenu();
+          break;
+        case "started":
+          this.isRecording = true;
+          this.currentSession = msg.session;
+          this.updateMenu();
+          break;
+        case "stopped":
+          this.isRecording = false;
+          this.currentSession = null;
+          this.recordingDuration = 0;
+          this.updateMenu();
+          break;
+        case "transcript":
+          // Could display in a window if desired
+          console.log(`[${msg.speaker}] ${msg.text}`);
+          break;
+        case "error":
+          console.error("Python error:", msg.message);
+          break;
+        case "saved":
+          console.log("Transcript saved:", msg.path);
+          this.updateMenu();
+          break;
+      }
+    });
+
+    this.pythonProcess.onError((error) => {
+      console.error("Python process error:", error);
+    });
+  }
+
+  private getIcon(recording: boolean): string {
+    // Use simple template images for menu bar
+    // In production, these would be actual icon files
+    const iconName = recording ? "icon-recording.png" : "icon.png";
+    if (app.isPackaged) {
+      return path.join(process.resourcesPath, "assets", iconName);
+    }
+    return path.join(__dirname, "..", "..", "assets", iconName);
+  }
+
+  private formatDuration(seconds: number): string {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  }
+
+  private buildMenu(): Menu {
+    const historyFiles = this.history.getRecentFiles(10);
+
+    const historySubmenu: Electron.MenuItemConstructorOptions[] = historyFiles.length > 0
+      ? [
+          ...historyFiles.map((file) => ({
+            label: `📄 ${file.displayName}`,
+            click: () => this.openTranscript(file),
+          })),
+          { type: "separator" as const },
+          {
+            label: "🗑️ Delete older than 7 days",
+            click: () => this.deleteOldTranscripts(7),
+          },
+          {
+            label: "🗑️ Delete older than 30 days",
+            click: () => this.deleteOldTranscripts(30),
+          },
+          {
+            label: "🗑️ Delete all",
+            click: () => this.deleteOldTranscripts(0),
+          },
+        ]
+      : [{ label: "No transcripts yet", enabled: false }];
+
+    const template: Electron.MenuItemConstructorOptions[] = [
+      // Recording status
+      this.isRecording
+        ? {
+            label: `● Recording... (${this.formatDuration(this.recordingDuration)})`,
+            enabled: false,
+          }
+        : {
+            label: "Start Recording",
+            click: () => this.startRecording(),
+          },
+
+      // Stop button (only when recording)
+      ...(this.isRecording
+        ? [
+            {
+              label: "Stop Recording",
+              click: () => this.stopRecording(),
+            },
+          ]
+        : []),
+
+      { type: "separator" as const },
+
+      // Summarize
+      {
+        label: "Summarize Current",
+        enabled: this.isRecording || historyFiles.length > 0,
+        click: () => this.summarizeTranscript(),
+      },
+
+      { type: "separator" as const },
+
+      // History
+      {
+        label: "History",
+        submenu: historySubmenu,
+      },
+
+      { type: "separator" as const },
+
+      // Settings
+      {
+        label: "Settings...",
+        click: () => this.openSettings(),
+      },
+
+      // Quit
+      {
+        label: "Quit",
+        click: () => this.quit(),
+      },
+    ];
+
+    return Menu.buildFromTemplate(template);
+  }
+
+  private updateMenu(): void {
+    if (this.tray) {
+      this.tray.setContextMenu(this.buildMenu());
+      // Update icon based on recording state
+      try {
+        const iconPath = this.getIcon(this.isRecording);
+        const icon = nativeImage.createFromPath(iconPath);
+        if (!icon.isEmpty()) {
+          this.tray.setImage(icon);
+        }
+      } catch (e) {
+        // Icon files may not exist yet
+      }
+    }
+  }
+
+  private async startRecording(): Promise<void> {
+    if (this.isRecording) return;
+    await this.pythonProcess.start();
+    this.pythonProcess.send({ command: "start" });
+  }
+
+  private stopRecording(): void {
+    if (!this.isRecording) return;
+    this.pythonProcess.send({ command: "stop" });
+  }
+
+  private openTranscript(file: TranscriptFile): void {
+    shell.openPath(file.path);
+  }
+
+  private deleteOldTranscripts(daysOld: number): void {
+    this.history.deleteOlderThan(daysOld);
+    this.updateMenu();
+  }
+
+  private openSettings(): void {
+    // Create a simple settings window
+    const win = new BrowserWindow({
+      width: 500,
+      height: 400,
+      title: "Ohh Brother Settings",
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        preload: path.join(__dirname, "preload.js"),
+      },
+    });
+
+    // Load settings HTML
+    win.loadFile(path.join(__dirname, "..", "renderer", "settings.html"));
+  }
+
+  private async summarizeTranscript(): Promise<void> {
+    // Get the most recent transcript
+    const files = this.history.getRecentFiles(1);
+    if (files.length === 0) return;
+
+    const transcript = this.history.readTranscript(files[0].path);
+    if (!transcript) return;
+
+    const settings = this.settings.get();
+    if (!settings.llm?.apiKey) {
+      console.log("No API key configured for summarization");
+      return;
+    }
+
+    // Create summary window
+    const win = new BrowserWindow({
+      width: 600,
+      height: 500,
+      title: "Meeting Summary",
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        preload: path.join(__dirname, "preload.js"),
+      },
+    });
+
+    win.loadFile(path.join(__dirname, "..", "renderer", "summary.html"));
+
+    // Send transcript to renderer for summarization
+    win.webContents.on("did-finish-load", () => {
+      win.webContents.send("summarize", {
+        transcript,
+        settings: settings.llm,
+      });
+    });
+  }
+
+  private quit(): void {
+    this.stopRecording();
+    this.pythonProcess.stop();
+    app.quit();
+  }
+
+  async start(): Promise<void> {
+    await app.whenReady();
+
+    // Hide dock icon (menu bar app)
+    app.dock?.hide();
+
+    // Create tray
+    const iconPath = this.getIcon(false);
+    let icon: nativeImage;
+    try {
+      icon = nativeImage.createFromPath(iconPath);
+      if (icon.isEmpty()) {
+        // Create a simple placeholder icon
+        icon = nativeImage.createEmpty();
+      }
+    } catch {
+      icon = nativeImage.createEmpty();
+    }
+
+    this.tray = new Tray(icon);
+    this.tray.setToolTip("Ohh Brother");
+    this.tray.setContextMenu(this.buildMenu());
+
+    // Update menu periodically when recording (for duration display)
+    setInterval(() => {
+      if (this.isRecording) {
+        this.pythonProcess.send({ command: "status" });
+      }
+    }, 1000);
+
+    app.on("window-all-closed", (e: Event) => {
+      // Don't quit when windows close - we're a menu bar app
+      e.preventDefault();
+    });
+  }
+}
+
+// Main entry point
+const ohhBrother = new OhhBrotherApp();
+ohhBrother.start().catch(console.error);

@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ohh Brother Settings</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #1e1e1e;
+      color: #e0e0e0;
+      padding: 20px;
+      font-size: 14px;
+    }
+    h1 {
+      font-size: 18px;
+      margin-bottom: 20px;
+      color: #fff;
+    }
+    .section {
+      margin-bottom: 24px;
+    }
+    .section h2 {
+      font-size: 14px;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 12px;
+    }
+    label {
+      display: block;
+      margin-bottom: 6px;
+      color: #ccc;
+    }
+    select, input[type="text"], input[type="password"] {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #444;
+      border-radius: 6px;
+      background: #2a2a2a;
+      color: #fff;
+      font-size: 14px;
+      margin-bottom: 12px;
+    }
+    select:focus, input:focus {
+      outline: none;
+      border-color: #0a84ff;
+    }
+    .row {
+      display: flex;
+      gap: 12px;
+    }
+    .row > * {
+      flex: 1;
+    }
+    button {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    button.primary {
+      background: #0a84ff;
+      color: #fff;
+    }
+    button.primary:hover {
+      background: #0077ed;
+    }
+    button.secondary {
+      background: #3a3a3a;
+      color: #fff;
+    }
+    button.secondary:hover {
+      background: #4a4a4a;
+    }
+    .buttons {
+      display: flex;
+      gap: 12px;
+      margin-top: 20px;
+    }
+    .help {
+      font-size: 12px;
+      color: #888;
+      margin-top: -8px;
+      margin-bottom: 12px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Settings</h1>
+
+  <div class="section">
+    <h2>LLM Provider</h2>
+    <label for="provider">Provider</label>
+    <select id="provider">
+      <option value="anthropic">Anthropic (Claude)</option>
+      <option value="openai">OpenAI</option>
+    </select>
+
+    <label for="apiKey">API Key</label>
+    <input type="password" id="apiKey" placeholder="sk-...">
+    <p class="help">Your API key is stored locally and never shared.</p>
+
+    <label for="model">Model</label>
+    <select id="model">
+      <option value="claude-haiku-4-20250514">Claude Haiku (fast, cheap)</option>
+      <option value="claude-sonnet-4-20250514">Claude Sonnet (balanced)</option>
+      <option value="claude-opus-4-20250514">Claude Opus (best quality)</option>
+    </select>
+  </div>
+
+  <div class="section">
+    <h2>Recording</h2>
+    <div class="row">
+      <div>
+        <label for="sampleRate">Sample Rate</label>
+        <select id="sampleRate">
+          <option value="16000">16000 Hz (default)</option>
+          <option value="44100">44100 Hz (high quality)</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>History</h2>
+    <label for="maxAgeDays">Auto-delete transcripts after</label>
+    <select id="maxAgeDays">
+      <option value="30">30 days</option>
+      <option value="60">60 days</option>
+      <option value="90">90 days</option>
+      <option value="180">180 days</option>
+      <option value="365">1 year</option>
+      <option value="0">Never</option>
+    </select>
+  </div>
+
+  <div class="buttons">
+    <button class="secondary" onclick="window.close()">Cancel</button>
+    <button class="primary" onclick="saveSettings()">Save</button>
+  </div>
+
+  <script>
+    const providerSelect = document.getElementById('provider');
+    const modelSelect = document.getElementById('model');
+
+    const models = {
+      anthropic: [
+        { value: 'claude-haiku-4-20250514', label: 'Claude Haiku (fast, cheap)' },
+        { value: 'claude-sonnet-4-20250514', label: 'Claude Sonnet (balanced)' },
+        { value: 'claude-opus-4-20250514', label: 'Claude Opus (best quality)' },
+      ],
+      openai: [
+        { value: 'gpt-4o-mini', label: 'GPT-4o Mini (fast, cheap)' },
+        { value: 'gpt-4o', label: 'GPT-4o (balanced)' },
+        { value: 'gpt-4-turbo', label: 'GPT-4 Turbo (best quality)' },
+      ],
+    };
+
+    providerSelect.addEventListener('change', () => {
+      const provider = providerSelect.value;
+      modelSelect.innerHTML = models[provider]
+        .map(m => `<option value="${m.value}">${m.label}</option>`)
+        .join('');
+    });
+
+    // Load settings
+    async function loadSettings() {
+      try {
+        const settings = await window.ohhBrother.getSettings();
+        if (settings?.llm) {
+          providerSelect.value = settings.llm.provider || 'anthropic';
+          providerSelect.dispatchEvent(new Event('change'));
+          document.getElementById('apiKey').value = settings.llm.apiKey || '';
+          modelSelect.value = settings.llm.model || models[settings.llm.provider || 'anthropic'][0].value;
+        }
+        if (settings?.recording) {
+          document.getElementById('sampleRate').value = settings.recording.sampleRate || 16000;
+        }
+        if (settings?.history) {
+          document.getElementById('maxAgeDays').value = settings.history.maxAgeDays || 90;
+        }
+      } catch (e) {
+        console.error('Failed to load settings:', e);
+      }
+    }
+
+    async function saveSettings() {
+      const settings = {
+        llm: {
+          provider: providerSelect.value,
+          apiKey: document.getElementById('apiKey').value,
+          model: modelSelect.value,
+        },
+        recording: {
+          sampleRate: parseInt(document.getElementById('sampleRate').value),
+          chunkMinutes: 60,
+        },
+        history: {
+          maxAgeDays: parseInt(document.getElementById('maxAgeDays').value),
+        },
+      };
+      try {
+        await window.ohhBrother.saveSettings(settings);
+        window.close();
+      } catch (e) {
+        console.error('Failed to save settings:', e);
+      }
+    }
+
+    loadSettings();
+  </script>
+</body>
+</html>

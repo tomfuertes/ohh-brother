@@ -1,0 +1,47 @@
+*local*
+
+# Dependencies
+node_modules/
+python/venv/
+
+# Build outputs
+dist/
+*.dmg
+*.zip
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.Python
+*.egg-info/
+
+# ML models (downloaded at runtime)
+*.ckpt
+*.pt
+*.bin
+*.safetensors
+
+# Local config
+.env
+.env.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# Electron
+out/
+
+# Bun
+bun.lockb

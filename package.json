@@ -1,0 +1,48 @@
+{
+  "name": "ohh-brother",
+  "version": "0.1.0",
+  "description": "Passive meeting transcription with speaker diarization",
+  "main": "dist/electron/main.js",
+  "author": "Ohh Brother",
+  "license": "MIT",
+  "scripts": {
+    "dev": "bun run build && electron .",
+    "build": "bun run build:electron && bun run build:renderer",
+    "build:electron": "bun build electron/main.ts electron/preload.ts --outdir dist/electron --target node",
+    "build:renderer": "mkdir -p dist/renderer && cp src/renderer/*.html dist/renderer/",
+    "start": "electron .",
+    "package": "electron-builder",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "menubar": "^9.4.0"
+  },
+  "devDependencies": {
+    "@anthropic-ai/sdk": "^0.30.0",
+    "@types/node": "^20.10.0",
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.0",
+    "openai": "^4.0.0",
+    "typescript": "^5.3.0"
+  },
+  "build": {
+    "appId": "com.ohhbrother.app",
+    "productName": "Ohh Brother",
+    "mac": {
+      "category": "public.app-category.productivity",
+      "icon": "assets/icon.icns",
+      "target": ["dmg", "zip"]
+    },
+    "files": [
+      "dist/**/*",
+      "python/**/*",
+      "assets/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "python",
+        "to": "python"
+      }
+    ]
+  }
+}
